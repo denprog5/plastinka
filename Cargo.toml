@@ -1,0 +1,26 @@
+[package]
+name = "plastinka"
+version = "1.0.0"
+edition = "2024"
+description = "Пластинка — плеер «сейчас играет» для стрима: трек из Spotify в OBS, живёт в трее"
+license = "MIT"
+repository = "https://github.com/denprog5/plastinka"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11.1"
+tray-icon = "0.26.1"
+windows = { version = "0.62.2", features = ["Foundation", "Media_Control", "Storage_Streams"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_SystemInformation", "Win32_System_Com", "Win32_Security", "Win32_Networking_WinHttp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[build-dependencies]
+embed-resource = "3.0.12"

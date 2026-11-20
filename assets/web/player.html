@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пластинка</title>
+<!--
+  Источник «Браузер» в OBS: URL http://127.0.0.1:7720/, размер 640 × 200.
+  Параметры в адресе:  ?progress=0 — без полосы прогресса (страница вообще не перерисовывается
+  между треками);  ?always=1 — не прятать на паузе;  ?demo=1 — показать пример без Spotify.
+  Нагрузка: страница статична, анимации идут только при смене трека и показе/скрытии,
+  полоса прогресса обновляется раз в секунду.
+-->
+<style>
+  html, body { margin: 0; width: 640px; height: 200px; overflow: hidden; background: transparent; }
+  body {
+    font-family: "Segoe UI Variable Display", "Segoe UI", "Bahnschrift", sans-serif;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .card {
+    position: absolute; left: 28px; top: 40px;
+    width: 560px; height: 128px; box-sizing: border-box;
+    padding: 14px 24px 14px 14px;
+    display: flex; gap: 20px; align-items: center;
+    background: #0a0a0a url(bg.webp) center / cover;
+    border: 1px solid rgba(255, 255, 255, .07);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+    transition: clip-path .55s cubic-bezier(.7, 0, .2, 1), opacity .3s;
+  }
+  .card.shown { clip-path: inset(-30px -60px -30px -60px); opacity: 1; }
+
+  .cover-box { position: relative; width: 100px; height: 100px; flex: none; }
+  .cover {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    outline: 1px solid rgba(255, 255, 255, .08); outline-offset: -1px;
+    transition: opacity .25s;
+  }
+
+  .info { flex: 1; min-width: 0; transition: opacity .16s, transform .16s; }
+  .label {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 10.5px; letter-spacing: .38em; text-transform: uppercase; color: #8b8b8b;
+    font-weight: 400;
+  }
+  .label::before { content: ""; width: 18px; height: 2px; background: #e3141b; }
+  .label .eq { display: none; }
+  .title, .artist { white-space: nowrap; overflow: hidden; }
+  .title > span, .artist > span { display: inline-block; will-change: transform; }
+  /* Длинный текст едет туда-обратно; края плавно гаснут, чтобы буквы не обрубались. */
+  .title.run, .artist.run {
+    margin-left: -10px; padding-left: 10px;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
+  }
+  .title { margin-top: 7px; font-size: 24px; line-height: 1.18; color: #f3f3f3; letter-spacing: .01em; }
+  .artist { margin-top: 1px; font-size: 14.5px; line-height: 1.3; color: #a2a2a2; }
+
+  .bar { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
+  .bar.off { display: none; }
+  .track { flex: 1; height: 2px; background: rgba(255, 255, 255, .12); position: relative; overflow: hidden; }
+  .fill {
+    position: absolute; inset: 0; background: #e3141b;
+    transform-origin: left center; transform: scaleX(0);
+  }
+  .time {
+    font-size: 11px; color: #8b8b8b; letter-spacing: .06em;
+    font-variant-numeric: tabular-nums; min-width: 72px; text-align: right;
+  }
+
+  /* Красная глитч-полоса, как на баннерах канала: лежит на верхнем крае карточки. */
+  .glitch {
+    position: absolute; left: -46px; top: -13px; width: 330px;
+    pointer-events: none; transform-origin: left center;
+  }
+  /* Вспышка при смене трека: полоса пролетает через карточку. */
+  .sweep {
+    position: absolute; left: -40px; top: 50%; width: 640px;
+    margin-top: -14px; pointer-events: none; opacity: 0;
+  }
+
+  .card.swap .info { opacity: 0; transform: translateX(10px); }
+  .card.swap .cover { opacity: .15; }
+  .card.flash .sweep { animation: sweep .5s cubic-bezier(.6, 0, .3, 1); }
+  .card.flash .glitch { animation: jitter .5s steps(5); }
+  .card.flash .title { animation: split .6s ease-out; }
+
+  @keyframes sweep {
+    0%   { opacity: 0; transform: translateX(-55%) scaleY(.6); }
+    30%  { opacity: 1; }
+    100% { opacity: 0; transform: translateX(35%) scaleY(1.1); }
+  }
+  @keyframes jitter {
+    0%   { transform: translate(0, 0) scaleX(1); }
+    20%  { transform: translate(14px, 2px) scaleX(1.25); }
+    40%  { transform: translate(-6px, -1px) scaleX(.85); }
+    60%  { transform: translate(22px, 1px) scaleX(1.4); }
+    80%  { transform: translate(-3px, 0) scaleX(.95); }
+    100% { transform: translate(0, 0) scaleX(1); }
+  }
+  @keyframes split {
+    0%   { text-shadow: -3px 0 rgba(227, 20, 27, .9), 3px 0 rgba(120, 200, 255, .35); }
+    100% { text-shadow: 0 0 rgba(227, 20, 27, 0), 0 0 rgba(120, 200, 255, 0); }
+  }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <img class="sweep" src="glitch.webp" alt="">
+  <div class="cover-box"><img class="cover" id="cover" src="vinyl.webp" alt=""></div>
+  <div class="info">
+    <div class="label">Сейчас играет</div>
+    <div class="title" id="title"><span></span></div>
+    <div class="artist" id="artist"><span></span></div>
+    <div class="bar" id="bar">
+      <div class="track"><div class="fill" id="fill"></div></div>
+      <div class="time" id="time"></div>
+    </div>
+  </div>
+  <img class="glitch" src="glitch.webp" alt="">
+</div>
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const showProgress = q.get("progress") !== "0";
+  const always = q.get("always") === "1";
+  const $ = (id) => document.getElementById(id);
+  const card = $("card"), cover = $("cover"), title = $("title"), artist = $("artist");
+  const bar = $("bar"), fill = $("fill"), time = $("time");
+
+  let cur = null;          // последнее состояние от программы
+  let base = 0, baseAt = 0; // позиция (мс) и момент её получения
+  let tick = 0, hideTimer = 0, swapTimer = 0, shownKey = "";
+
+  const fmt = (ms) => {
+    const s = Math.floor(ms / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+
+  function drawProgress() {
+    if (!cur || !cur.dur) return;
+    const pos = Math.min(cur.dur, base + (cur.playing ? performance.now() - baseAt : 0));
+    fill.style.transform = "scaleX(" + (pos / cur.dur).toFixed(4) + ")";
+    time.textContent = fmt(pos) + " / " + fmt(cur.dur);
+  }
+
+  // Таймер прогресса живёт, только пока карточка видна и трек играет.
+  function syncTimer() {
+    const need = showProgress && cur && cur.playing && cur.dur > 0 && card.classList.contains("shown");
+    if (need && !tick) tick = setInterval(drawProgress, 1000);
+    if (!need && tick) { clearInterval(tick); tick = 0; }
+  }
+
+  function setVisible(v) {
+    clearTimeout(hideTimer);
+    if (v) {
+      if (!card.classList.contains("shown")) {
+        card.classList.add("shown");
+        flash();
+        startMarquee();
+      }
+      syncTimer();
+    } else if (card.classList.contains("shown")) {
+      // Небольшая задержка: при переключении трека плеер на миг бывает «не играет».
+      hideTimer = setTimeout(() => { card.classList.remove("shown"); stopMarquee(); syncTimer(); }, 2000);
+    }
+  }
+
+  function flash() {
+    card.classList.remove("flash");
+    void card.offsetWidth; // перезапуск CSS-анимации
+    card.classList.add("flash");
+  }
+  card.addEventListener("animationend", (e) => {
+    if (e.animationName === "sweep") card.classList.remove("flash");
+  });
+
+  // Длинное название: сначала чуть уменьшаем шрифт, а если всё равно не влезает — бегущая строка.
+  function fitTitle() {
+    const span = title.firstElementChild;
+    stopMarquee();
+    title.style.fontSize = "";
+    for (let px = 24; px > 20 && span.offsetWidth > title.clientWidth; px -= 1) {
+      title.style.fontSize = px - 1 + "px";
+    }
+  }
+
+  // Бегущая строка: пауза 2,5 с в начале, едет ~40 px/с до конца, пауза 2 с, едет обратно.
+  // Работает только пока карточка видна и текст не влезает — иначе страница стоит на месте.
+  const runs = [];
+  function stopMarquee() {
+    while (runs.length) runs.pop().cancel();
+    title.classList.remove("run"); artist.classList.remove("run");
+  }
+  function startMarquee() {
+    stopMarquee();
+    if (!card.classList.contains("shown")) return;
+    for (const box of [title, artist]) {
+      const span = box.firstElementChild;
+      if (span.offsetWidth <= box.clientWidth) continue;
+      box.classList.add("run");
+      // Конец текста доезжает до начала правого затухания (18 px); слева отступ 10 px под затухание.
+      const dist = span.offsetWidth - box.clientWidth + 28;
+      const move = dist / 40 * 1000, hold1 = 2500, hold2 = 2000;
+      const total = hold1 + move + hold2 + move;
+      const at = (ms) => ms / total;
+      const end = "translateX(" + -dist + "px)";
+      runs.push(span.animate([
+        { transform: "translateX(0)", offset: 0 },
+        { transform: "translateX(0)", offset: at(hold1), easing: "ease-in-out" },
+        { transform: end, offset: at(hold1 + move) },
+        { transform: end, offset: at(hold1 + move + hold2), easing: "ease-in-out" },
+        { transform: "translateX(0)", offset: 1 },
+      ], { duration: total, iterations: Infinity }));
+    }
+  }
+
+  function coverUrl(s) { return s.cover ? "cover?v=" + s.cover : "vinyl.webp"; }
+
+  async function applyTrack(s, animate) {
+    const url = coverUrl(s);
+    const img = new Image();
+    img.src = url;
+    try { await img.decode(); } catch (_) {}
+    const doSwap = () => {
+      cover.src = url;
+      title.firstElementChild.textContent = s.title;
+      artist.firstElementChild.textContent = s.artist || s.album || "";
+      fitTitle();
+      startMarquee();
+      drawProgress();
+    };
+    clearTimeout(swapTimer);
+    if (animate) {
+      card.classList.add("swap");
+      flash();
+      swapTimer = setTimeout(() => { doSwap(); card.classList.remove("swap"); }, 170);
+    } else {
+      doSwap();
+    }
+  }
+
+  function onState(s) {
+    const visibleBefore = card.classList.contains("shown");
+    if (!s.on) { cur = null; setVisible(false); syncTimer(); return; }
+    cur = s;
+    base = s.pos; baseAt = performance.now();
+    bar.classList.toggle("off", !showProgress || !s.dur);
+    const key = s.title + "\u0001" + s.artist + "\u0001" + s.album;
+    if (key !== shownKey) {
+      const animate = shownKey !== "" && visibleBefore;
+      shownKey = key;
+      applyTrack(s, animate);
+    } else if (cover.getAttribute("src") !== coverUrl(s)) {
+      applyTrack(s, false); // обложка пришла чуть позже названия
+    } else {
+      drawProgress();
+    }
+    setVisible(s.playing || always);
+    syncTimer();
+  }
+
+  if (q.get("demo") === "1") {
+    const demo = [
+      { title: "Нервы на пределе", artist: "banshee", album: "", dur: 213000 },
+      { title: "Midnight City (Extended Version Remastered 2026)", artist: "M83", album: "", dur: 243000 },
+      { title: "Кукла колдуна", artist: "Король и Шут", album: "", dur: 205000 },
+    ];
+    let i = 0;
+    const next = () => {
+      const d = demo[i++ % demo.length];
+      onState({ on: true, playing: true, pos: 61000, cover: 0, ...d });
+    };
+    next();
+    setInterval(next, 8000);
+    return;
+  }
+
+  const es = new EventSource("events");
+  es.onmessage = (e) => { try { onState(JSON.parse(e.data)); } catch (_) {} };
+  // Программу закрыли — прячем карточку; EventSource сам переподключится.
+  es.onerror = () => { cur = null; setVisible(false); syncTimer(); };
+})();
+</script>
+</body>
+</html>
