@@ -6,7 +6,8 @@
 <!--
   Источник «Браузер» в OBS: URL http://127.0.0.1:7720/, размер 640 × 200.
   Параметры в адресе:  ?progress=0 — без полосы прогресса (страница вообще не перерисовывается
-  между треками);  ?always=1 — не прятать на паузе;  ?demo=1 — показать пример без Spotify.
+  между треками);  ?always=1 — не прятать на паузе;  ?demo=1 — показать пример без Spotify;
+  ?tint=0.38 — плотность тонировки стекла от 0 (прозрачное) до 1 (непрозрачное).
   Нагрузка: страница статична, анимации идут только при смене трека и показе/скрытии,
   полоса прогресса обновляется раз в секунду.
 -->
@@ -19,30 +20,66 @@
   }
 
   .card {
+    --tint: .38;
     position: absolute; left: 28px; top: 40px;
     width: 560px; height: 128px; box-sizing: border-box;
     padding: 14px 24px 14px 14px;
     display: flex; gap: 20px; align-items: center;
-    background: #0a0a0a url(bg.webp) center / cover;
-    border: 1px solid rgba(255, 255, 255, .07);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+    border-radius: 10px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .32);
     clip-path: inset(0 100% 0 0);
     opacity: 0;
     transition: clip-path .55s cubic-bezier(.7, 0, .2, 1), opacity .3s;
   }
   .card.shown { clip-path: inset(-30px -60px -30px -60px); opacity: 1; }
 
+  /* Стекло. Источник «Браузер» не видит сцену OBS под собой, поэтому размыть игру за карточкой
+     нельзя: стекло — это полупрозрачная тонировка (игра просвечивает), блик, светлая кромка,
+     зерно и мягкий цветной отсвет от размытой обложки. Всё статично — перерисовка только
+     при смене обложки. */
+  .glass {
+    position: absolute; inset: 0; border-radius: inherit; overflow: hidden;
+    background: rgba(12, 12, 16, var(--tint));
+  }
+  .wash {
+    position: absolute; inset: -40px;
+    background: center / cover no-repeat;
+    filter: blur(30px) saturate(1.35);
+    opacity: .26;
+  }
+  .grain {
+    position: absolute; inset: 0;
+    background: url(bg.webp) center / cover;
+    mix-blend-mode: screen; opacity: .55;
+  }
+  .glass::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(115deg,
+      rgba(255, 255, 255, .17) 0%, rgba(255, 255, 255, .06) 26%, rgba(255, 255, 255, 0) 44%,
+      rgba(255, 255, 255, 0) 78%, rgba(255, 255, 255, .05) 100%);
+  }
+  .glass::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, .30),
+      inset 1px 0 0 rgba(255, 255, 255, .12),
+      inset -1px 0 0 rgba(255, 255, 255, .06),
+      inset 0 -1px 0 rgba(255, 255, 255, .06);
+  }
+  .cover-box, .info { position: relative; }
+
   .cover-box { position: relative; width: 100px; height: 100px; flex: none; }
+  .cover-box { border-radius: 6px; box-shadow: 0 6px 16px rgba(0, 0, 0, .38); }
   .cover {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    outline: 1px solid rgba(255, 255, 255, .08); outline-offset: -1px;
+    width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 6px;
+    outline: 1px solid rgba(255, 255, 255, .14); outline-offset: -1px;
     transition: opacity .25s;
   }
 
   .info { flex: 1; min-width: 0; transition: opacity .16s, transform .16s; }
   .label {
     display: flex; align-items: center; gap: 10px;
-    font-size: 10.5px; letter-spacing: .38em; text-transform: uppercase; color: #8b8b8b;
+    font-size: 10.5px; letter-spacing: .38em; text-transform: uppercase; color: rgba(255, 255, 255, .62);
     font-weight: 400;
   }
   .label::before { content: ""; width: 18px; height: 2px; background: #e3141b; }
@@ -54,18 +91,20 @@
     margin-left: -10px; padding-left: 10px;
     -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 18px), transparent 100%);
   }
-  .title { margin-top: 7px; font-size: 24px; line-height: 1.18; color: #f3f3f3; letter-spacing: .01em; }
-  .artist { margin-top: 1px; font-size: 14.5px; line-height: 1.3; color: #a2a2a2; }
+  .title { margin-top: 7px; font-size: 24px; line-height: 1.18; color: #f5f5f5; letter-spacing: .01em; }
+  .artist { margin-top: 1px; font-size: 14.5px; line-height: 1.3; color: rgba(255, 255, 255, .72); }
+  /* Тонкая тень — текст читается и на светлых кадрах игры за стеклом. */
+  .label, .title, .artist, .time { text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
 
   .bar { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
   .bar.off { display: none; }
-  .track { flex: 1; height: 2px; background: rgba(255, 255, 255, .12); position: relative; overflow: hidden; }
+  .track { flex: 1; height: 2px; background: rgba(255, 255, 255, .2); position: relative; overflow: hidden; }
   .fill {
     position: absolute; inset: 0; background: #e3141b;
     transform-origin: left center; transform: scaleX(0);
   }
   .time {
-    font-size: 11px; color: #8b8b8b; letter-spacing: .06em;
+    font-size: 11px; color: rgba(255, 255, 255, .62); letter-spacing: .06em;
     font-variant-numeric: tabular-nums; min-width: 72px; text-align: right;
   }
 
@@ -107,6 +146,7 @@
 </head>
 <body>
 <div class="card" id="card">
+  <div class="glass"><div class="wash" id="wash"></div><div class="grain"></div></div>
   <img class="sweep" src="glitch.webp" alt="">
   <div class="cover-box"><img class="cover" id="cover" src="vinyl.webp" alt=""></div>
   <div class="info">
@@ -127,7 +167,9 @@
   const always = q.get("always") === "1";
   const $ = (id) => document.getElementById(id);
   const card = $("card"), cover = $("cover"), title = $("title"), artist = $("artist");
-  const bar = $("bar"), fill = $("fill"), time = $("time");
+  const bar = $("bar"), fill = $("fill"), time = $("time"), wash = $("wash");
+  const tint = parseFloat(q.get("tint"));
+  if (tint >= 0 && tint <= 1) card.style.setProperty("--tint", tint);
 
   let cur = null;          // последнее состояние от программы
   let base = 0, baseAt = 0; // позиция (мс) и момент её получения
@@ -225,6 +267,7 @@
     try { await img.decode(); } catch (_) {}
     const doSwap = () => {
       cover.src = url;
+      wash.style.backgroundImage = "url(" + url + ")";
       title.firstElementChild.textContent = s.title;
       artist.firstElementChild.textContent = s.artist || s.album || "";
       fitTitle();

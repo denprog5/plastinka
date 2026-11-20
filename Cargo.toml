@@ -1,6 +1,6 @@
 [package]
 name = "plastinka"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "Пластинка — плеер «сейчас играет» для стрима: трек из Spotify в OBS, живёт в трее"
 license = "MIT"

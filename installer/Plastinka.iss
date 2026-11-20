@@ -4,7 +4,7 @@
 ; (тогда он запускается с /VERYSILENT /RELAUNCH=1).
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef BinDir
   #define BinDir "..\target\release"
