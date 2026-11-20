@@ -205,3 +205,17 @@ fn message_box(text: &str, flags: u32) -> i32 {
     let c = wide(APP_NAME);
     unsafe { MessageBoxW(std::ptr::null_mut(), t.as_ptr(), c.as_ptr(), flags) }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[ignore = "меняет реестр пользователя; запускать вручную"]
+    fn autostart_toggle() {
+        let was = super::autostart_enabled();
+        assert!(super::set_autostart(true));
+        assert!(super::autostart_enabled());
+        assert!(super::set_autostart(false));
+        assert!(!super::autostart_enabled());
+        super::set_autostart(was);
+    }
+}
