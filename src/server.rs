@@ -30,6 +30,9 @@ static ASSETS: &[Asset] = &[
     asset!("/bg.webp", "image/webp", "bg.webp"),
     asset!("/glitch.webp", "image/webp", "glitch.webp"),
     asset!("/vinyl.webp", "image/webp", "vinyl.webp"),
+    asset!("/imperium-bg.webp", "image/webp", "imperium-bg.webp"),
+    asset!("/imperium-crest.webp", "image/webp", "imperium-crest.webp"),
+    asset!("/neon-bg.webp", "image/webp", "neon-bg.webp"),
 ];
 
 /// Запускает сервер. Ошибка — порт занят.

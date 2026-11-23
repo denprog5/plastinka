@@ -5,6 +5,15 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+/// Темы карточки: имя для страницы (`data-theme`) и пункт меню трея. Первая — по умолчанию.
+pub const THEMES: &[(&str, &str)] = &[
+    ("glitch", "Глитч"),
+    ("clean", "Глитч без полосы сверху"),
+    ("imperium", "Империум"),
+    ("neon", "Неон"),
+    ("terminal", "Терминал"),
+];
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(default)]
 pub struct Config {
@@ -14,6 +23,8 @@ pub struct Config {
     pub any_player: bool,
     /// Ставить обновление, найденное сразу после запуска (найденное позже — только пункт меню).
     pub auto_update: bool,
+    /// Тема карточки (см. `THEMES`). Параметр `?theme=` в адресе источника важнее.
+    pub theme: String,
 }
 
 impl Default for Config {
@@ -22,6 +33,7 @@ impl Default for Config {
             port: 7720,
             any_player: false,
             auto_update: true,
+            theme: THEMES[0].0.to_string(),
         }
     }
 }
@@ -38,11 +50,21 @@ impl Config {
             return (Config::default(), None);
         };
         match serde_json::from_str::<Config>(&text) {
-            Ok(c) => (c, None),
+            Ok(mut c) => {
+                c.normalize();
+                (c, None)
+            }
             Err(e) => (
                 Config::default(),
                 Some(format!("Ошибка в {}: {e}", path.display())),
             ),
+        }
+    }
+
+    /// Незнакомая тема (опечатка в файле, тема из более новой версии) — тема по умолчанию.
+    fn normalize(&mut self) {
+        if !THEMES.iter().any(|(id, _)| *id == self.theme) {
+            self.theme = THEMES[0].0.to_string();
         }
     }
 
@@ -74,4 +96,22 @@ pub fn app_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_default()
         .join("Plastinka")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_theme_falls_back_to_default() {
+        let mut c: Config = serde_json::from_str(r#"{"theme":"pink"}"#).unwrap();
+        c.normalize();
+        assert_eq!(c.theme, "glitch");
+        let mut c: Config = serde_json::from_str(r#"{"theme":"neon"}"#).unwrap();
+        c.normalize();
+        assert_eq!(c.theme, "neon");
+        // Старый config.json без поля theme.
+        let c: Config = serde_json::from_str(r#"{"port":7720}"#).unwrap();
+        assert_eq!(c.theme, "glitch");
+    }
 }

@@ -12,13 +12,13 @@ mod win;
 
 use std::sync::Arc;
 
-use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetMessageW, GetSystemMetrics, MSG, SM_CXSMICON, TranslateMessage,
 };
 
-use config::Config;
+use config::{Config, THEMES};
 use hub::{Hub, SharedHub, Track};
 use media::Media;
 use update::Updater;
@@ -36,6 +36,8 @@ struct App {
     now: MenuItem,
     copy_url: MenuItem,
     open: MenuItem,
+    /// Пункты подменю «Тема» в порядке `THEMES`.
+    themes: Vec<CheckMenuItem>,
     any_player: CheckMenuItem,
     autostart: CheckMenuItem,
     update: MenuItem,
@@ -59,6 +61,7 @@ fn main() {
     }
 
     let hub: SharedHub = Arc::new(Hub::default());
+    hub.set_theme(&cfg.theme);
     let server_error = server::spawn(cfg.port, hub.clone()).err();
     let media = Media::spawn(cfg.any_player, hub.clone());
     let updater = Updater::spawn(cfg.auto_update, hub.clone());
@@ -69,6 +72,14 @@ fn main() {
     let now = MenuItem::new("Запуск…", false, None);
     let copy_url = MenuItem::new("Скопировать ссылку для OBS", true, None);
     let open = MenuItem::new("Открыть плеер в браузере", true, None);
+    let themes: Vec<CheckMenuItem> = THEMES
+        .iter()
+        .map(|(id, name)| CheckMenuItem::new(*name, true, *id == cfg.theme, None))
+        .collect();
+    let theme_menu = Submenu::new("Тема", true);
+    for item in &themes {
+        let _ = theme_menu.append(item);
+    }
     let any_player =
         CheckMenuItem::new("Любой плеер, не только Spotify", true, cfg.any_player, None);
     let autostart = CheckMenuItem::new(
@@ -86,6 +97,7 @@ fn main() {
         &sep(),
         &copy_url,
         &open,
+        &theme_menu,
         &sep(),
         &any_player,
         &autostart,
@@ -109,6 +121,7 @@ fn main() {
         now,
         copy_url,
         open,
+        themes,
         any_player,
         autostart,
         update,
@@ -176,6 +189,13 @@ impl App {
             }
         } else if id == self.open.id() {
             win::shell_open(self.cfg.url(), None);
+        } else if let Some(i) = self.themes.iter().position(|t| t.id() == id) {
+            let theme = THEMES[i].0;
+            if self.cfg.theme != theme {
+                self.cfg.theme = theme.to_string();
+                self.cfg.save();
+                self.hub.set_theme(theme);
+            }
         } else if id == self.any_player.id() {
             self.cfg.any_player = !self.cfg.any_player;
             self.cfg.save();
@@ -208,6 +228,10 @@ impl App {
         };
         self.now.set_text(line);
         self.any_player.set_checked(self.cfg.any_player);
+        // Щелчок по пункту сам переключает галочку — возвращаем «радио»: отмечена только текущая.
+        for (item, (id, _)) in self.themes.iter().zip(THEMES) {
+            item.set_checked(*id == self.cfg.theme);
+        }
         // Галочку автозапуска мог поменять кто-то ещё — читаем из реестра.
         self.autostart.set_checked(win::autostart_enabled());
         let found = self.hub.update();

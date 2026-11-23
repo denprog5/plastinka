@@ -1,5 +1,6 @@
 //! Общее состояние: текущий трек (для трея), обложка и подписчики страницы OBS.
 //! Поток плеера кладёт сюда новое состояние, сервер раздаёт его по SSE.
+//! Тема карточки идёт отдельным событием `{"theme":"…"}`: новая страница получает её первой.
 
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -52,6 +53,8 @@ pub struct Hub {
     last: Mutex<Option<Arc<str>>>,
     now: Mutex<Option<Track>>,
     cover: Mutex<Option<Cover>>,
+    /// Событие с темой карточки, выбранной в трее.
+    theme: Mutex<Option<Arc<str>>>,
     /// Найденная новая версия программы.
     update: Mutex<Option<String>>,
 }
@@ -67,6 +70,9 @@ impl Hub {
             .unwrap()
             .clone()
             .unwrap_or_else(|| Track::to_json(None).into());
+        if let Some(theme) = self.theme.lock().unwrap().clone() {
+            let _ = tx.send(theme);
+        }
         let _ = tx.send(msg);
         self.clients.lock().unwrap().push(tx);
         rx
@@ -76,6 +82,17 @@ impl Hub {
         let msg: Arc<str> = Track::to_json(now.as_ref()).into();
         *self.now.lock().unwrap() = now;
         *self.last.lock().unwrap() = Some(msg.clone());
+        self.broadcast(msg);
+    }
+
+    /// Тема карточки: запоминается для новых страниц и сразу уходит открытым.
+    pub fn set_theme(&self, theme: &str) {
+        let msg: Arc<str> = serde_json::json!({ "theme": theme }).to_string().into();
+        *self.theme.lock().unwrap() = Some(msg.clone());
+        self.broadcast(msg);
+    }
+
+    fn broadcast(&self, msg: Arc<str>) {
         // Отключившиеся страницы отваливаются здесь: их приёмник уже уничтожен.
         self.clients
             .lock()
@@ -109,5 +126,23 @@ impl Hub {
 
     pub fn cover_ver(&self) -> u64 {
         self.cover.lock().unwrap().as_ref().map_or(0, |c| c.ver)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_reaches_open_and_new_pages() {
+        let hub = Hub::default();
+        let open = hub.subscribe();
+        assert_eq!(&*open.recv().unwrap(), r#"{"on":false}"#);
+        hub.set_theme("imperium");
+        assert_eq!(&*open.recv().unwrap(), r#"{"theme":"imperium"}"#);
+        // Новая страница: сначала тема, потом трек.
+        let new = hub.subscribe();
+        assert_eq!(&*new.recv().unwrap(), r#"{"theme":"imperium"}"#);
+        assert_eq!(&*new.recv().unwrap(), r#"{"on":false}"#);
     }
 }
